@@ -1,0 +1,5 @@
+.ansible/
+.venv/
+config.yaml
+secrets.yaml
+*.retry

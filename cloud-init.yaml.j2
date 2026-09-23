@@ -1,0 +1,13 @@
+#cloud-config
+hostname: {{ server_name }}
+disable_root: true
+ssh_pwauth: false
+users:
+  - name: {{ admin_user }}
+    groups: sudo
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - {{ ssh_public_key }}
+

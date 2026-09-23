@@ -1,0 +1,9 @@
+server_name: my-vps
+server_type: cx23
+server_location: nbg1
+server_image: ubuntu-24.04
+admin_user: deploy
+ssh_public_key_file: ~/.ssh/id_ed25519.pub
+ssh_private_key_file: ~/.ssh/id_ed25519
+hetzner_ssh_key_name: ""
+bootstrap_ssh_cidr: ""
