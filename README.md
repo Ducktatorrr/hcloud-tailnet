@@ -1,6 +1,6 @@
 # hcloud-tailnet
 
-Bootstrap and secure a Hetzner VPS with Tailscale in minutes. Reruns reapply the single-server baseline; the tool has no fleet inventory or application management.
+Bootstrap and secure a Hetzner VPS with Tailscale in minutes.
 
 Connect your computer to Tailscale, then install the dependencies:
 
@@ -32,5 +32,7 @@ ansible-playbook -i localhost, setup.yaml
 The playbook detects your public IPv4 for temporary SSH access. Set `bootstrap_ssh_cidr` in `config.yaml` if it detects the wrong address. If setup stops before closing SSH, fix the problem and rerun. For later runs, use Tailscale with MagicDNS, or pass `-e tailnet_host=100.x.y.z`.
 
 ## FAQ
+
+**Is this a full IaC tool?** No. It bootstraps one VPS. Reruns reapply the server baseline, but it doesn't maintain an inventory or manage applications.
 
 **Why use a Hetzner firewall instead of UFW?** [Docker can bypass UFW's usual rules](https://docs.docker.com/engine/network/packet-filtering-firewalls/) when a container port is published. The [Hetzner firewall](https://docs.hetzner.com/cloud/firewalls/faq/) filters public traffic before it reaches the VPS; with no inbound rules, unsolicited public connections are blocked. Access over Tailscale is governed by your tailnet policy.
