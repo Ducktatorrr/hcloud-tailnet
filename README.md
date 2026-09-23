@@ -1,6 +1,6 @@
 # hcloud-tailnet
 
-Bootstraps one Hetzner Cloud VPS with Tailscale, then closes public SSH after checking private access. Reruns reapply this baseline; the tool has no fleet inventory or application management.
+Bootstrap and secure a Hetzner VPS with Tailscale in minutes. Reruns reapply the single-server baseline; the tool has no fleet inventory or application management.
 
 Connect your computer to Tailscale, then install the dependencies:
 
