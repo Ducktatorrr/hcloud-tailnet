@@ -1,0 +1,18 @@
+# digitalocean.cloud.firewall can't update rules on an existing firewall
+# (see provision/digitalocean.yaml), so this closes SSH via the API directly.
+- name: Close public SSH
+  ansible.builtin.uri:
+    url: "https://api.digitalocean.com/v2/firewalls/{{ firewall_id }}"
+    method: PUT
+    headers:
+      Authorization: "Bearer {{ digitalocean_token }}"
+    body_format: json
+    body:
+      name: "{{ server_name }}-firewall"
+      tags:
+        - "{{ server_name }}"
+      inbound_rules: []
+      outbound_rules: "{{ do_outbound_rules }}"
+    status_code: 200
+  delegate_to: localhost
+  become: false

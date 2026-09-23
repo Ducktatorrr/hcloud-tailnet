@@ -1,0 +1,74 @@
+- name: Look up existing server
+  hetzner.hcloud.server_info:
+    name: "{{ server_name }}"
+    api_token: "{{ hcloud_token }}"
+  register: existing_server
+
+- name: Look up existing firewall
+  hetzner.hcloud.firewall_info:
+    name: "{{ server_name }}-firewall"
+    api_token: "{{ hcloud_token }}"
+  register: existing_firewall
+
+- name: Choose connection path
+  ansible.builtin.set_fact:
+    public_bootstrap: "{{ access_mode == 'public' or (access_mode == 'auto' and (existing_server.hcloud_server_info | length == 0 or (existing_firewall.hcloud_firewall_info | length > 0 and existing_firewall.hcloud_firewall_info[0].rules | length > 0))) }}"
+
+- name: Detect current public IPv4
+  ansible.builtin.uri:
+    url: https://ipv4.icanhazip.com/
+    return_content: true
+  register: public_ip
+  when: public_bootstrap and bootstrap_ssh_cidr | length == 0
+
+- name: Create or update firewall
+  hetzner.hcloud.firewall:
+    name: "{{ server_name }}-firewall"
+    api_token: "{{ hcloud_token }}"
+    rules: "{{ [{'direction': 'in', 'protocol': 'tcp', 'port': '22', 'source_ips': [(bootstrap_ssh_cidr or (public_ip.content | trim ~ '/32'))]}] if public_bootstrap else [] }}"
+
+- name: Check existing Hetzner SSH key
+  hetzner.hcloud.ssh_key_info:
+    name: "{{ ssh_key_name }}"
+    api_token: "{{ hcloud_token }}"
+  register: existing_ssh_key
+  when: ssh_key_name | length > 0
+
+- name: Verify existing Hetzner SSH key
+  ansible.builtin.assert:
+    that: existing_ssh_key.hcloud_ssh_key_info | length == 1 and existing_ssh_key.hcloud_ssh_key_info[0].public_key.split()[:2] == ssh_public_key.split()[:2]
+    fail_msg: The named Hetzner SSH key must match ssh_public_key_file.
+  when: ssh_key_name | length > 0
+
+- name: Register SSH public key
+  hetzner.hcloud.ssh_key:
+    name: "{{ server_name }}-admin"
+    public_key: "{{ ssh_public_key }}"
+    api_token: "{{ hcloud_token }}"
+  when: ssh_key_name | length == 0
+
+- name: Create or update server
+  hetzner.hcloud.server:
+    name: "{{ server_name }}"
+    server_type: "{{ server_type }}"
+    location: "{{ server_location }}"
+    image: "{{ server_image }}"
+    ssh_keys:
+      - "{{ ssh_key_name or (server_name ~ '-admin') }}"
+    firewalls:
+      - "{{ server_name }}-firewall"
+    user_data: "{{ lookup('template', 'cloud-init.yaml.j2') }}"
+    state: present
+    api_token: "{{ hcloud_token }}"
+  register: server
+
+- name: Add server to this run
+  ansible.builtin.add_host:
+    name: vps_target
+    ansible_host: "{{ server.hcloud_server.ipv4_address if public_bootstrap else tailnet_host }}"
+    ansible_user: "{{ admin_user }}"
+    ansible_ssh_private_key_file: "{{ ssh_private_key_file | expanduser }}"
+    ansible_ssh_common_args: -o StrictHostKeyChecking=accept-new -o BatchMode=yes
+    private_key_file: "{{ ssh_private_key_file | expanduser }}"
+    server_name: "{{ server_name }}"
+    public_bootstrap: "{{ public_bootstrap }}"

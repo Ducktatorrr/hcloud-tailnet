@@ -1,0 +1,7 @@
+- name: Close public SSH
+  hetzner.hcloud.firewall:
+    name: "{{ server_name }}-firewall"
+    rules: []
+    api_token: "{{ hcloud_token }}"
+  delegate_to: localhost
+  become: false

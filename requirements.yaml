@@ -1,4 +1,6 @@
 collections:
   - name: hetzner.hcloud
     version: '>=6.10.0,<7.0.0'
+  - name: digitalocean.cloud
+    version: '>=1.2.0,<2.0.0'
 

@@ -1,5 +1,6 @@
 .ansible/
 .venv/
 config.yaml
-secrets.yaml
+*config.yaml
+*secrets.yaml
 *.retry

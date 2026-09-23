@@ -1,9 +1,11 @@
+provider: hcloud # hcloud | digitalocean
 server_name: my-vps
-server_type: cx23
-server_location: nbg1
-server_image: ubuntu-24.04
+server_type: cx23 # hcloud: server type, e.g. cx23 | digitalocean: droplet size, e.g. s-1vcpu-1gb
+server_location: nbg1 # hcloud: location, e.g. nbg1 | digitalocean: region, e.g. ams3
+server_image: ubuntu-24.04 # hcloud: image, e.g. ubuntu-24.04 | digitalocean: image, e.g. ubuntu-24-04-x64
 admin_user: deploy
 ssh_public_key_file: ~/.ssh/id_ed25519.pub
 ssh_private_key_file: ~/.ssh/id_ed25519
-hetzner_ssh_key_name: ""
+ssh_key_name: "" # name of an SSH key already registered with your provider, or blank to register one
 bootstrap_ssh_cidr: ""
+do_project_name: "" # digitalocean only: project to assign the droplet to, blank for the default project

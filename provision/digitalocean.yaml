@@ -1,0 +1,110 @@
+# Unlike Hetzner, DO firewalls default-deny outbound traffic once any rule
+# exists, so an explicit allow-all outbound rule is always included.
+- name: Look up existing droplet
+  digitalocean.cloud.droplets_info:
+    name: "{{ server_name }}"
+    token: "{{ digitalocean_token }}"
+  register: existing_droplet
+
+- name: Look up existing firewall
+  digitalocean.cloud.firewalls_info:
+    token: "{{ digitalocean_token }}"
+  register: existing_firewalls
+
+- name: Extract existing firewall
+  ansible.builtin.set_fact:
+    existing_firewall: "{{ existing_firewalls.firewalls | selectattr('name', 'equalto', server_name ~ '-firewall') | list }}"
+
+- name: Choose connection path
+  ansible.builtin.set_fact:
+    public_bootstrap: "{{ access_mode == 'public' or (access_mode == 'auto' and (existing_droplet.droplets | length == 0 or (existing_firewall | length > 0 and existing_firewall[0].inbound_rules | length > 0))) }}"
+
+- name: Detect current public IPv4
+  ansible.builtin.uri:
+    url: https://ipv4.icanhazip.com/
+    return_content: true
+  register: public_ip
+  when: public_bootstrap and bootstrap_ssh_cidr | length == 0
+
+- name: Create tag for firewall targeting
+  digitalocean.cloud.tag:
+    name: "{{ server_name }}"
+    token: "{{ digitalocean_token }}"
+
+- name: Determine desired firewall rules
+  ansible.builtin.set_fact:
+    do_inbound_rules: "{{ [{'protocol': 'tcp', 'ports': '22', 'sources': {'addresses': [bootstrap_ssh_cidr or (public_ip.content | trim ~ '/32')]}}] if public_bootstrap else [] }}"
+    do_outbound_rules:
+      - protocol: tcp
+        ports: "1-65535"
+        destinations:
+          addresses: ["0.0.0.0/0", "::/0"]
+      - protocol: udp
+        ports: "1-65535"
+        destinations:
+          addresses: ["0.0.0.0/0", "::/0"]
+      - protocol: icmp
+        destinations:
+          addresses: ["0.0.0.0/0", "::/0"]
+
+# digitalocean.cloud.firewall can only create or report "exists" - it never
+# updates rules on an existing firewall - so manage it via the API directly.
+- name: Create or update firewall
+  ansible.builtin.uri:
+    url: "https://api.digitalocean.com/v2/firewalls{{ ('/' + existing_firewall[0].id) if existing_firewall else '' }}"
+    method: "{{ 'PUT' if existing_firewall else 'POST' }}"
+    headers:
+      Authorization: "Bearer {{ digitalocean_token }}"
+    body_format: json
+    body:
+      name: "{{ server_name }}-firewall"
+      tags:
+        - "{{ server_name }}"
+      inbound_rules: "{{ do_inbound_rules }}"
+      outbound_rules: "{{ do_outbound_rules }}"
+    status_code: "{{ 200 if existing_firewall else 202 }}"
+  register: firewall
+
+- name: Register SSH public key
+  digitalocean.cloud.ssh_key:
+    name: "{{ ssh_key_name or (server_name ~ '-admin') }}"
+    public_key: "{{ ssh_public_key }}"
+    token: "{{ digitalocean_token }}"
+  register: registered_key
+
+- name: Create or update droplet
+  digitalocean.cloud.droplet:
+    name: "{{ server_name }}"
+    region: "{{ server_location }}"
+    size: "{{ server_type }}"
+    image: "{{ server_image }}"
+    ssh_keys:
+      - "{{ registered_key.ssh_key.fingerprint }}"
+    tags:
+      - "{{ server_name }}"
+    user_data: "{{ lookup('template', 'cloud-init.yaml.j2') }}"
+    unique_name: true
+    state: present
+    token: "{{ digitalocean_token }}"
+  register: droplet
+
+- name: Assign droplet to DigitalOcean project
+  digitalocean.cloud.project_resources:
+    project_name: "{{ do_project_name }}"
+    resources:
+      - "do:droplet:{{ droplet.droplet.id }}"
+    token: "{{ digitalocean_token }}"
+  when: do_project_name | length > 0
+
+- name: Add server to this run
+  ansible.builtin.add_host:
+    name: vps_target
+    ansible_host: "{{ (droplet.droplet.networks.v4 | selectattr('type', 'equalto', 'public') | map(attribute='ip_address') | first) if public_bootstrap else tailnet_host }}"
+    ansible_user: "{{ admin_user }}"
+    ansible_ssh_private_key_file: "{{ ssh_private_key_file | expanduser }}"
+    ansible_ssh_common_args: -o StrictHostKeyChecking=accept-new -o BatchMode=yes
+    private_key_file: "{{ ssh_private_key_file | expanduser }}"
+    server_name: "{{ server_name }}"
+    public_bootstrap: "{{ public_bootstrap }}"
+    firewall_id: "{{ firewall.json.firewall.id }}"
+    do_outbound_rules: "{{ do_outbound_rules }}"
